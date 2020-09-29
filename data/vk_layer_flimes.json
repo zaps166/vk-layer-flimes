@@ -1,0 +1,17 @@
+{
+  "file_format_version" : "1.0.0",
+  "layer" : {
+    "name": "VK_LAYER_FLIMES",
+    "description": "Frame limiter for Vulkan",
+    "type": "GLOBAL",
+    "api_version": "1.1.70",
+    "library_path": "libvk-layer-flimes.so",
+    "implementation_version": "1",
+    "enable_environment": {
+      "ENABLE_VK_LAYER_FLIMES": "1"
+    },
+    "disable_environment": {
+      "DISABLE_VK_LAYER_FLIMES": "1"
+    }
+  }
+}

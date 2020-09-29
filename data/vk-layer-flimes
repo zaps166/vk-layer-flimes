@@ -1,0 +1,59 @@
+#!/bin/sh
+
+if (( $# < 1 ))
+then
+    echo "Usage: $0 [arguments] \"executable\""
+    echo "Arguments:"
+    echo "   (value)                  max framerate"
+    echo "   ext_control              enable external framerate control via /tmp/vk-layer-flimes/name-pid"
+    echo "   nearest                  nearest texture filtering"
+    echo "   trilinear                trilinear texture filtering"
+    echo "   mip_lod_bias (value)     mip LOD bias"
+    echo "   max_anisotropy (value)   max anisotropy"
+    echo "   min_image_count (value)  min image count if supported by the driver (2 - double buffering, 3 - triple buffering)"
+    echo "   immediate                disable V-Sync"
+    echo "   mailbox                  tear-free non-blocking mode (if supported by the driver)"
+    echo "   fifo                     enable V-Sync"
+    echo "   fifo_relaxed             adaptive V-Sync (if supported by the driver)"
+    exit 1
+fi
+
+export ENABLE_VK_LAYER_FLIMES=1
+
+while (( $# > 0 ))
+do
+    if [[ $1 =~ ^[0-9]+\.?[0-9]*$ ]]
+    then
+        export VK_LAYER_FLIMES_FRAMERATE=$1
+    else
+        case $1 in
+            ext_control)
+                export VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL=1
+            ;;
+            nearest|trilinear)
+                export VK_LAYER_FLIMES_FILTER=$1
+            ;;
+            mip_lod_bias)
+                export VK_LAYER_FLIMES_MIP_LOD_BIAS=$2
+                shift
+            ;;
+            max_anisotropy)
+                export VK_LAYER_FLIMES_MAX_ANISOTROPY=$2
+                shift
+            ;;
+            min_image_count)
+                export VK_LAYER_FLIMES_MIN_IMAGE_COUNT=$2
+                shift
+            ;;
+            immediate|mailbox|fifo|fifo_relaxed)
+                export VK_LAYER_FLIMES_PRESENT_MODE=$1
+            ;;
+            *)
+                break
+            ;;
+        esac
+    fi
+    shift
+done
+
+exec "$@"
