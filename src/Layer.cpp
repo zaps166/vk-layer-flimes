@@ -117,13 +117,13 @@ struct Config
 static Config g_config = [] {
     Config config;
 
-    cout << VK_LAYER_FLIMES_NAME << " v" << VK_LAYER_FLIMES_VERSION << " active" << "\n";
+    cerr << VK_LAYER_FLIMES_NAME << " v" << VK_LAYER_FLIMES_VERSION << " active" << "\n";
 
     if (auto env = getenv(g_framerateEnvKey); env && *env)
     {
         config.framerate = atof(env);
         if (config.framerate > 0.0)
-            cout << "  Framerate: " << config.framerate << "\n";
+            cerr << "  Framerate: " << config.framerate << "\n";
     }
 
     if (auto env = getenv(g_filterEnvKey); env && *env)
@@ -141,26 +141,26 @@ static Config g_config = [] {
         if (filterIt != filters.end())
         {
             config.filter = filterIt->second;
-            cout << "  Texture filtering: " << filterIt->first << "\n";
+            cerr << "  Texture filtering: " << filterIt->first << "\n";
         }
     }
     if (auto env = getenv(g_mipLodBiasEnvKey); env && *env)
     {
         config.mipLodBias = atof(env);
-        cout << "  Mip LOD bias: " << *config.mipLodBias << "\n";
+        cerr << "  Mip LOD bias: " << *config.mipLodBias << "\n";
     }
     if (auto env = getenv(g_anisotropyEnvKey); env && *env)
     {
         config.maxAnisotropy = atof(env);
         if (config.maxAnisotropy >= 1.0f)
-            cout << "  Max anisotropy: " << config.maxAnisotropy << "\n";
+            cerr << "  Max anisotropy: " << config.maxAnisotropy << "\n";
     }
 
     if (auto env = getenv(g_minImageCountEnvKey); env && *env)
     {
         config.minImageCount = atoi(env);
         if (config.minImageCount > 0)
-            cout << "  Min image count: " << config.minImageCount << "\n";
+            cerr << "  Min image count: " << config.minImageCount << "\n";
     }
     if (auto env = getenv(g_presentModeEnvKey); env && *env)
     {
@@ -172,7 +172,7 @@ static Config g_config = [] {
         if (modesIt != g_presentModes.end())
         {
             config.presentMode = modesIt->second;
-            cout << "  Present mode: " << modesIt->first << "\n";
+            cerr << "  Present mode: " << modesIt->first << "\n";
         }
     }
 
@@ -192,7 +192,7 @@ static Config g_config = [] {
         } catch (const invalid_argument &) {} });
     }
 
-    cout << flush;
+    cerr << flush;
 
     return config;
 }();
