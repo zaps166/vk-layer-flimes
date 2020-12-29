@@ -258,16 +258,18 @@ static VKAPI_CALL VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateI
     auto &instanceData = g_instances[*pInstance];
     instanceData = make_shared<InstanceData>();
 
-    instanceData->getProcAddr = getInstanceProcAddr;
+    instanceData->getProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(getInstanceProcAddr(*pInstance, "vkGetInstanceProcAddr"));
+    if (!instanceData->getProcAddr)
+        instanceData->getProcAddr = getInstanceProcAddr;
 
-    instanceData->getPhysicalDeviceSurfaceCapabilitiesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(getInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"));
-    instanceData->getPhysicalDeviceSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(getInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
-    instanceData->createDevice = reinterpret_cast<PFN_vkCreateDevice>(getInstanceProcAddr(*pInstance, "vkCreateDevice"));
-    instanceData->destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(getInstanceProcAddr(*pInstance, "vkDestroyInstance"));
+    instanceData->getPhysicalDeviceSurfaceCapabilitiesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"));
+    instanceData->getPhysicalDeviceSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
+    instanceData->createDevice = reinterpret_cast<PFN_vkCreateDevice>(instanceData->getProcAddr(*pInstance, "vkCreateDevice"));
+    instanceData->destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(instanceData->getProcAddr(*pInstance, "vkDestroyInstance"));
 
     instanceData->instance = *pInstance;
 
-    if (auto enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(getInstanceProcAddr(*pInstance, "vkEnumeratePhysicalDevices")))
+    if (auto enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(instanceData->getProcAddr(*pInstance, "vkEnumeratePhysicalDevices")))
     {
         uint32_t physicalDeviceCount = 0;
         enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, nullptr);
@@ -338,13 +340,15 @@ static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const
     auto &deviceData = g_devices[*pDevice];
     deviceData = make_unique<DeviceData>();
 
-    deviceData->getProcAddr = getDeviceProcAddr;
+    deviceData->getProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(getDeviceProcAddr(*pDevice, "vkGetDeviceProcAddr"));
+    if (!deviceData->getProcAddr)
+        deviceData->getProcAddr = getDeviceProcAddr;
 
-    deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(getDeviceProcAddr(*pDevice, "vkCreateSampler"));
-    deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(getDeviceProcAddr(*pDevice, "vkCreateSwapchainKHR"));
-    deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImageKHR"));
-    deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
-    deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(getDeviceProcAddr(*pDevice, "vkDestroyDevice"));
+    deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(deviceData->getProcAddr(*pDevice, "vkCreateSampler"));
+    deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(deviceData->getProcAddr(*pDevice, "vkCreateSwapchainKHR"));
+    deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(deviceData->getProcAddr(*pDevice, "vkAcquireNextImageKHR"));
+    deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(deviceData->getProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
+    deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(deviceData->getProcAddr(*pDevice, "vkDestroyDevice"));
 
     deviceData->instanceData = instanceData;
 
