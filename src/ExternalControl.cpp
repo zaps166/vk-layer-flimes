@@ -100,23 +100,6 @@ ExternalControl::~ExternalControl()
 
 void ExternalControl::run()
 {
-    for (auto &&p : filesystem::directory_iterator(m_path))
-    {
-        // Clean old pipes
-
-        if (p.path() == m_fifoPath || !p.is_fifo())
-            continue;
-
-        const int fd = open(p.path().c_str(), O_WRONLY | O_NONBLOCK);
-        if (fd > -1)
-        {
-            close(fd);
-            continue;
-        }
-
-        filesystem::remove(p);
-    }
-
     int fd = -1;
     string str;
 
