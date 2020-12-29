@@ -6,6 +6,7 @@ then
     echo "Arguments:"
     echo "   (value)                  max framerate"
     echo "   ext_control              enable external framerate control via /tmp/vk-layer-flimes/name-pid"
+    echo "   ext_control_verbose      display the new framerate value on stderr"
     echo "   nearest                  nearest texture filtering"
     echo "   trilinear                trilinear texture filtering"
     echo "   mip_lod_bias (value)     mip LOD bias"
@@ -29,6 +30,9 @@ do
         case $1 in
             ext_control)
                 export VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL=1
+            ;;
+            ext_control_verbose)
+                export VK_LAYER_FLIMES_EXTERNAL_CONTROL_VERBOSE=1
             ;;
             nearest|trilinear)
                 export VK_LAYER_FLIMES_FILTER=$1

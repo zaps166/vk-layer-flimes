@@ -16,7 +16,8 @@ For more information, run `vk-layer-flimes` with no arguments.
 All environment variables are set via `vk-layer-flimes` script, but they also can be set manually.
 
 - `ENABLE_VK_LAYER_FLIMES` - `1` - enable vk-layer-flimes,
-- `VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL` - `1` - enable external FPS control
+- `VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL` - `1` - enable external framerate control
+- `VK_LAYER_FLIMES_EXTERNAL_CONTROL_VERBOSE` - `1` - display the new framerate value on stderr
 - `VK_LAYER_FLIMES_FILTER` - `nearest` or `trilinear` - force texture filtering
 - `VK_LAYER_FLIMES_MIP_LOD_BIAS` - float number - force Mipmap LOD bias
 - `VK_LAYER_FLIMES_MAX_ANISOTROPY` - float number - force max anisotropy

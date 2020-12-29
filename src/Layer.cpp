@@ -42,6 +42,7 @@
 using namespace std;
 
 constexpr auto g_enableExternalControlKey = "VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL";
+constexpr auto g_externalControlVerboseKey = "VK_LAYER_FLIMES_EXTERNAL_CONTROL_VERBOSE";
 
 constexpr auto g_framerateEnvKey = "VK_LAYER_FLIMES_FRAMERATE";
 constexpr auto g_filterEnvKey = "VK_LAYER_FLIMES_FILTER";
@@ -51,6 +52,7 @@ constexpr auto g_minImageCountEnvKey = "VK_LAYER_FLIMES_MIN_IMAGE_COUNT";
 constexpr auto g_presentModeEnvKey = "VK_LAYER_FLIMES_PRESENT_MODE";
 
 static unique_ptr<ExternalControl> g_externalControl;
+static bool g_externalControlVerbose = false;
 
 struct InstanceData
 {
@@ -184,7 +186,8 @@ static Config g_config = [] {
             const auto fps = stod(str);
             if (g_config.framerate != fps)
             {
-                cerr << "New framerate: " << fps << endl;
+                if (g_externalControlVerbose)
+                    cerr << VK_LAYER_FLIMES_NAME << " new framerate: " << fps << endl;
 
                 scoped_lock devicesLock(g_devicesMutex);
                 g_config.framerate = fps;
@@ -192,6 +195,10 @@ static Config g_config = [] {
                     deviceData->frameLimiter.reset();
             }
         } catch (const invalid_argument &) {} });
+    }
+    if (auto env = getenv(g_externalControlVerboseKey); env && *env != '0')
+    {
+        g_externalControlVerbose = true;
     }
 
     cerr << flush;
