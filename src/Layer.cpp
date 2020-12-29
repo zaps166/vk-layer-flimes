@@ -56,6 +56,8 @@ struct InstanceData
 {
     PFN_vkGetInstanceProcAddr getProcAddr = nullptr;
 
+    PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices = nullptr;
+    PFN_vkGetPhysicalDeviceProperties getPhysicalDeviceProperties = nullptr;
     PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
     PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModesKHR = nullptr;
     PFN_vkCreateDevice createDevice = nullptr;
@@ -262,20 +264,22 @@ static VKAPI_CALL VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateI
     if (!instanceData->getProcAddr)
         instanceData->getProcAddr = getInstanceProcAddr;
 
+    instanceData->enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(instanceData->getProcAddr(*pInstance, "vkEnumeratePhysicalDevices"));
+    instanceData->getPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceProperties"));
     instanceData->getPhysicalDeviceSurfaceCapabilitiesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"));
     instanceData->getPhysicalDeviceSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
-    instanceData->createDevice = reinterpret_cast<PFN_vkCreateDevice>(instanceData->getProcAddr(*pInstance, "vkCreateDevice"));
-    instanceData->destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(instanceData->getProcAddr(*pInstance, "vkDestroyInstance"));
+    instanceData->createDevice = reinterpret_cast<PFN_vkCreateDevice>(getInstanceProcAddr(*pInstance, "vkCreateDevice"));
+    instanceData->destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(getInstanceProcAddr(*pInstance, "vkDestroyInstance"));
 
     instanceData->instance = *pInstance;
 
-    if (auto enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(instanceData->getProcAddr(*pInstance, "vkEnumeratePhysicalDevices")))
+    if (instanceData->enumeratePhysicalDevices)
     {
         uint32_t physicalDeviceCount = 0;
-        enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, nullptr);
+        instanceData->enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, nullptr);
 
         vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
-        enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, physicalDevices.data());
+        instanceData->enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, physicalDevices.data());
 
         for (auto &&physicalDevice : physicalDevices)
             instanceData->physicalDevices.insert(physicalDevice);
@@ -318,21 +322,17 @@ static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const
     if (!instanceData)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    auto instance = instanceData->instance;
-    auto getInstanceProcAddr = instanceData->getProcAddr;
-    auto createDevice = instanceData->createDevice;
-
     auto getDeviceProcAddr = layerDeviceCreateInfo->u.pLayerInfo->pfnNextGetDeviceProcAddr;
     if (!getDeviceProcAddr)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    if (!createDevice)
+    if (!instanceData->createDevice)
         return VK_ERROR_INITIALIZATION_FAILED;
 
     // Advance the link info for the next element of the chain
     layerDeviceCreateInfo->u.pLayerInfo = layerDeviceCreateInfo->u.pLayerInfo->pNext;
 
-    if (auto ret = createDevice(physicalDevice, pCreateInfo, pAllocator, pDevice); ret != VK_SUCCESS)
+    if (auto ret = instanceData->createDevice(physicalDevice, pCreateInfo, pAllocator, pDevice); ret != VK_SUCCESS)
         return ret;
 
     scoped_lock devicesLock(g_devicesMutex);
@@ -344,20 +344,20 @@ static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const
     if (!deviceData->getProcAddr)
         deviceData->getProcAddr = getDeviceProcAddr;
 
-    deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(deviceData->getProcAddr(*pDevice, "vkCreateSampler"));
-    deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(deviceData->getProcAddr(*pDevice, "vkCreateSwapchainKHR"));
-    deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(deviceData->getProcAddr(*pDevice, "vkAcquireNextImageKHR"));
-    deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(deviceData->getProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
-    deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(deviceData->getProcAddr(*pDevice, "vkDestroyDevice"));
+    deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(getDeviceProcAddr(*pDevice, "vkCreateSampler"));
+    deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(getDeviceProcAddr(*pDevice, "vkCreateSwapchainKHR"));
+    deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImageKHR"));
+    deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
+    deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(getDeviceProcAddr(*pDevice, "vkDestroyDevice"));
 
     deviceData->instanceData = instanceData;
 
     deviceData->physicalDevice = physicalDevice;
 
-    if (auto getPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(getInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties")))
+    if (instanceData->getPhysicalDeviceProperties)
     {
         VkPhysicalDeviceProperties physicalDeviceProperties = {};
-        getPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+        instanceData->getPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
         deviceData->maxSamplerLodBias = physicalDeviceProperties.limits.maxSamplerLodBias;
         deviceData->maxSamplerAnisotropy = physicalDeviceProperties.limits.maxSamplerAnisotropy;
     }
