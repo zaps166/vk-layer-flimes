@@ -58,14 +58,11 @@ struct InstanceData
 {
     PFN_vkGetInstanceProcAddr getProcAddr = nullptr;
 
-    PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices = nullptr;
     PFN_vkGetPhysicalDeviceProperties getPhysicalDeviceProperties = nullptr;
     PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
     PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModesKHR = nullptr;
     PFN_vkCreateDevice createDevice = nullptr;
     PFN_vkDestroyInstance destroyInstance = nullptr;
-
-    VkInstance instance = VK_NULL_HANDLE;
 
     set<VkPhysicalDevice> physicalDevices;
 };
@@ -267,26 +264,24 @@ static VKAPI_CALL VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateI
     auto &instanceData = g_instances[*pInstance];
     instanceData = make_shared<InstanceData>();
 
-    instanceData->getProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(getInstanceProcAddr(*pInstance, "vkGetInstanceProcAddr"));
-    if (!instanceData->getProcAddr)
-        instanceData->getProcAddr = getInstanceProcAddr;
+    instanceData->getProcAddr = getInstanceProcAddr;
 
-    instanceData->enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(instanceData->getProcAddr(*pInstance, "vkEnumeratePhysicalDevices"));
-    instanceData->getPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceProperties"));
-    instanceData->getPhysicalDeviceSurfaceCapabilitiesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"));
-    instanceData->getPhysicalDeviceSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(instanceData->getProcAddr(*pInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
+    instanceData->getPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(getInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceProperties"));
+    instanceData->getPhysicalDeviceSurfaceCapabilitiesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(getInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"));
+    instanceData->getPhysicalDeviceSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(getInstanceProcAddr(*pInstance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
     instanceData->createDevice = reinterpret_cast<PFN_vkCreateDevice>(getInstanceProcAddr(*pInstance, "vkCreateDevice"));
     instanceData->destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(getInstanceProcAddr(*pInstance, "vkDestroyInstance"));
 
-    instanceData->instance = *pInstance;
-
-    if (instanceData->enumeratePhysicalDevices)
+    auto enumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(
+        reinterpret_cast<PFN_vkGetInstanceProcAddr>(getInstanceProcAddr(*pInstance, "vkGetInstanceProcAddr"))(*pInstance, "vkEnumeratePhysicalDevices")
+    );
+    if (enumeratePhysicalDevices)
     {
         uint32_t physicalDeviceCount = 0;
-        instanceData->enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, nullptr);
+        enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, nullptr);
 
         vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
-        instanceData->enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, physicalDevices.data());
+        enumeratePhysicalDevices(*pInstance, &physicalDeviceCount, physicalDevices.data());
 
         for (auto &&physicalDevice : physicalDevices)
             instanceData->physicalDevices.insert(physicalDevice);
@@ -347,9 +342,7 @@ static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const
     auto &deviceData = g_devices[*pDevice];
     deviceData = make_unique<DeviceData>();
 
-    deviceData->getProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(getDeviceProcAddr(*pDevice, "vkGetDeviceProcAddr"));
-    if (!deviceData->getProcAddr)
-        deviceData->getProcAddr = getDeviceProcAddr;
+    deviceData->getProcAddr = getDeviceProcAddr;
 
     deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(getDeviceProcAddr(*pDevice, "vkCreateSampler"));
     deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(getDeviceProcAddr(*pDevice, "vkCreateSwapchainKHR"));
@@ -488,8 +481,6 @@ extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(V
 extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName);
 
 static const map<string_view, PFN_vkVoidFunction> g_instanceFunctions = {
-    {"vkGetInstanceProcAddr", reinterpret_cast<PFN_vkVoidFunction>(vkGetInstanceProcAddr)},
-
     {"vkCreateInstance", reinterpret_cast<PFN_vkVoidFunction>(vkCreateInstance)},
     {"vkCreateDevice", reinterpret_cast<PFN_vkVoidFunction>(vkCreateDevice)},
     {"vkDestroyInstance", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyInstance)},
@@ -518,12 +509,11 @@ VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance i
     if (instancesIt == g_instances.end())
         return nullptr;
 
-    return reinterpret_cast<PFN_vkGetInstanceProcAddr>(instancesIt->second->getProcAddr)(instance, pName);
+    return instancesIt->second->getProcAddr(instance, pName);
 }
 VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName)
 {
-    auto fnsIt = g_deviceFunctions.find(pName);
-    if (fnsIt != g_deviceFunctions.end())
+    if (auto fnsIt = g_deviceFunctions.find(pName); fnsIt != g_deviceFunctions.end())
         return fnsIt->second;
 
     shared_lock devicesLock(g_devicesMutex);
@@ -532,5 +522,5 @@ VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice devic
     if (devicesIt == g_devices.end())
         return nullptr;
 
-    return reinterpret_cast<PFN_vkGetDeviceProcAddr>(devicesIt->second->getProcAddr)(device, pName);
+    return devicesIt->second->getProcAddr(device, pName);
 }
