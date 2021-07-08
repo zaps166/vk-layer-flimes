@@ -71,7 +71,7 @@ ExternalControl::ExternalControl(const Fn &fn)
         return;
     }
 
-    cout << "  External control enabled: " << m_fifoPath << "\n";
+    cerr << "  External control enabled: " << m_fifoPath << "\n";
 
     m_thr = thread(bind(&ExternalControl::run, this));
 }
