@@ -87,6 +87,9 @@ struct DeviceData
     float maxSamplerAnisotropy = 1.0f;
 
     optional<FrameLimiter> frameLimiter;
+
+    optional<VkPresentModeKHR> currentPresentMode;
+    bool presentModeChanged = false;
 };
 static map<VkDevice, unique_ptr<DeviceData>> g_devices;
 static shared_mutex g_devicesMutex;
@@ -118,7 +121,7 @@ struct Config
 static Config g_config = [] {
     Config config;
 
-    cerr << VK_LAYER_FLIMES_NAME << " v" << VK_LAYER_FLIMES_VERSION << " active" << "\n";
+    cerr << boolalpha << VK_LAYER_FLIMES_NAME << " v" << VK_LAYER_FLIMES_VERSION << " active" << "\n";
 
     if (auto env = getenv(g_framerateEnvKey); env && *env)
     {
@@ -179,19 +182,62 @@ static Config g_config = [] {
 
     if (auto env = getenv(g_enableExternalControlKey); env && *env != '0')
     {
-        g_externalControl = make_unique<ExternalControl>([](const string &str) { try {
-            const auto fps = stod(str);
-            if (g_config.framerate != fps)
+        g_externalControl = make_unique<ExternalControl>([](const string &str) {
+            optional<VkPresentModeKHR> newPresentMode;
+            string_view newPresentModeName;
+            if (str == "AUTO")
             {
-                if (g_externalControlVerbose)
-                    cerr << VK_LAYER_FLIMES_NAME << " new framerate: " << fps << endl;
-
-                scoped_lock devicesLock(g_devicesMutex);
-                g_config.framerate = fps;
-                for (auto &&[device, deviceData] : g_devices)
-                    deviceData->frameLimiter.reset();
+                newPresentModeName = str;
             }
-        } catch (const invalid_argument &) {} });
+            else
+            {
+                auto it = g_presentModes.find(str);
+                if (it != g_presentModes.end())
+                {
+                    newPresentMode = it->second;
+                    newPresentModeName = it->first;
+                }
+            }
+
+            if (!newPresentModeName.empty())
+            {
+                scoped_lock devicesLock(g_devicesMutex);
+
+                bool changed = false;
+                for (auto &&[device, deviceData] : g_devices)
+                {
+                    if (!deviceData->currentPresentMode)
+                        continue;
+
+                    if ((!newPresentMode && g_config.presentMode) || (newPresentMode && deviceData->currentPresentMode != newPresentMode))
+                    {
+                        deviceData->presentModeChanged = true;
+                        changed = true;
+                    }
+                }
+
+                if (g_externalControlVerbose && (changed || g_config.presentMode != newPresentMode))
+                    cerr << VK_LAYER_FLIMES_NAME << " new present mode: " << newPresentModeName << ", recreate swapchain: " << changed << endl;
+
+                g_config.presentMode = newPresentMode;
+            }
+            else try
+            {
+                const auto fps = stod(str);
+                if (g_config.framerate != fps)
+                {
+                    if (g_externalControlVerbose)
+                        cerr << VK_LAYER_FLIMES_NAME << " new framerate: " << fps << endl;
+
+                    scoped_lock devicesLock(g_devicesMutex);
+                    g_config.framerate = fps;
+                    for (auto &&[device, deviceData] : g_devices)
+                        deviceData->frameLimiter.reset();
+                }
+            }
+            catch (const invalid_argument &)
+            {}
+        });
     }
     if (auto env = getenv(g_externalControlVerboseKey); env && *env != '0')
     {
@@ -231,6 +277,9 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
         return VK_ERROR_INITIALIZATION_FAILED;
 
     auto deviceData = devicesIt->second.get();
+
+    if (deviceData->presentModeChanged)
+        return VK_ERROR_OUT_OF_DATE_KHR;
 
     limitFramerate(deviceData);
 
@@ -446,6 +495,9 @@ static VKAPI_CALL VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
             createInfo.minImageCount = minImageCount;
         }
     }
+
+    deviceData->currentPresentMode = createInfo.presentMode;
+    deviceData->presentModeChanged = false;
 
     return deviceData->createSwapchainKHR(device, &createInfo, pAllocator, pSwapchain);
 }
