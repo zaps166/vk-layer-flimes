@@ -32,6 +32,7 @@ do
                 export VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL=1
             ;;
             ext_control_verbose)
+                export VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL=1
                 export VK_LAYER_FLIMES_EXTERNAL_CONTROL_VERBOSE=1
             ;;
             nearest|trilinear)
