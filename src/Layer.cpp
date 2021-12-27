@@ -281,9 +281,11 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
     if (deviceData->presentModeChanged)
         return VK_ERROR_OUT_OF_DATE_KHR;
 
-    limitFramerate(deviceData);
+    auto ret = fn(deviceData);
+    if (ret == VK_SUCCESS || ret == VK_SUBOPTIMAL_KHR)
+        limitFramerate(deviceData);
 
-    return fn(deviceData);
+    return ret;
 }
 
 /**/
