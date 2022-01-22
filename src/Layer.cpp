@@ -50,6 +50,7 @@ constexpr auto g_mipLodBiasEnvKey = "VK_LAYER_FLIMES_MIP_LOD_BIAS";
 constexpr auto g_anisotropyEnvKey = "VK_LAYER_FLIMES_MAX_ANISOTROPY";
 constexpr auto g_minImageCountEnvKey = "VK_LAYER_FLIMES_MIN_IMAGE_COUNT";
 constexpr auto g_presentModeEnvKey = "VK_LAYER_FLIMES_PRESENT_MODE";
+constexpr auto g_preferMailboxPresentModeEnvKey = "VK_LAYER_FLIMES_PREFER_MAILBOX_PRESENT_MODE";
 
 static unique_ptr<ExternalControl> g_externalControl;
 static bool g_externalControlVerbose = false;
@@ -117,6 +118,7 @@ struct Config
 
     uint32_t minImageCount = 0;
     optional<VkPresentModeKHR> presentMode;
+    bool preferMailboxPresentMode = false;
 };
 static Config g_config = [] {
     Config config;
@@ -178,6 +180,12 @@ static Config g_config = [] {
             config.presentMode = modesIt->second;
             cerr << "  Present mode: " << modesIt->first << "\n";
         }
+    }
+    if (auto env = getenv(g_preferMailboxPresentModeEnvKey); env && *env)
+    {
+        config.preferMailboxPresentMode = (atoi(env) > 0);
+        if (config.preferMailboxPresentMode)
+            cerr << "  Prefer MAILBOX present mode\n";
     }
 
     if (auto env = getenv(g_enableExternalControlKey); env && *env != '0')
@@ -468,7 +476,7 @@ static VKAPI_CALL VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
 
     auto createInfo = *pCreateInfo;
 
-    if (g_config.presentMode && instanceData->getPhysicalDeviceSurfacePresentModesKHR)
+    if ((g_config.presentMode || g_config.preferMailboxPresentMode) && instanceData->getPhysicalDeviceSurfacePresentModesKHR)
     {
         uint32_t nPresentModes = 0;
         instanceData->getPhysicalDeviceSurfacePresentModesKHR(deviceData->physicalDevice, createInfo.surface, &nPresentModes, nullptr);
@@ -478,10 +486,17 @@ static VKAPI_CALL VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
 
         for (auto &&supportedPresentMode : presentModes)
         {
-            if (supportedPresentMode == *g_config.presentMode)
+            if (g_config.presentMode && supportedPresentMode == *g_config.presentMode)
             {
                 createInfo.presentMode = *g_config.presentMode;
                 break;
+            }
+
+            if (g_config.preferMailboxPresentMode && supportedPresentMode == VK_PRESENT_MODE_MAILBOX_KHR && createInfo.presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+            {
+                createInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+                if (!g_config.presentMode)
+                    break;
             }
         }
     }

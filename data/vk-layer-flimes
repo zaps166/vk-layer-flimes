@@ -16,6 +16,7 @@ then
     echo "   mailbox                  tear-free non-blocking mode (if supported by the driver)"
     echo "   fifo                     enable V-Sync"
     echo "   fifo_relaxed             adaptive V-Sync (if supported by the driver)"
+    echo "   prefer_mailbox           prefer MAILBOX present mode over IMMEDIATE present mode (if supported by the driver)"
     exit 1
 fi
 
@@ -52,6 +53,9 @@ do
             ;;
             immediate|mailbox|fifo|fifo_relaxed)
                 export VK_LAYER_FLIMES_PRESENT_MODE=$1
+            ;;
+            prefer_mailbox)
+                export VK_LAYER_FLIMES_PREFER_MAILBOX_PRESENT_MODE=1
             ;;
             *)
                 break

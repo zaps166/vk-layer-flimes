@@ -29,6 +29,7 @@ All environment variables are set via `vk-layer-flimes` script, but they also ca
   - `mailbox` - tear-free
   - `fifo` - V-Sync ON
   - `fifo_relaxed` - adaptive V-Sync
+- `VK_LAYER_FLIMES_PREFER_MAILBOX_PRESENT_MODE` - prefer MAILBOX present mode over IMMEDIATE present mode
 
 # Install
 
