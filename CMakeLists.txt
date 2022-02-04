@@ -12,7 +12,7 @@ file(GLOB SOURCE_FILES
     "src/*.hpp"
 )
 set(SCRIPT_FILE "data/vk-layer-flimes")
-set(JSON_FILE "data/vk_layer_flimes.json")
+set(JSON_FILE "data/VkLayerFlimes.json")
 
 add_library(${PROJECT_NAME} SHARED
     ${SOURCE_FILES}
