@@ -546,17 +546,12 @@ static VKAPI_CALL void vkDestroyDevice(VkDevice device, const VkAllocationCallba
 
 /**/
 
-extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName);
-extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName);
-
 static const map<string_view, PFN_vkVoidFunction> g_instanceFunctions = {
     {"vkCreateInstance", reinterpret_cast<PFN_vkVoidFunction>(vkCreateInstance)},
     {"vkCreateDevice", reinterpret_cast<PFN_vkVoidFunction>(vkCreateDevice)},
     {"vkDestroyInstance", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyInstance)},
 };
 static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
-    {"vkGetDeviceProcAddr", reinterpret_cast<PFN_vkVoidFunction>(vkGetDeviceProcAddr)},
-
     {"vkCreateSampler", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSampler)},
     {"vkCreateSwapchainKHR", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSwapchainKHR)},
     {"vkAcquireNextImageKHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImageKHR)},
@@ -564,7 +559,7 @@ static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
     {"vkDestroyDevice", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyDevice)},
 };
 
-VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName)
+extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName)
 {
     if (auto fnsIt = g_instanceFunctions.find(pName); fnsIt != g_instanceFunctions.end())
         return fnsIt->second;
@@ -580,7 +575,7 @@ VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance i
 
     return instancesIt->second->getProcAddr(instance, pName);
 }
-VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName)
+extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName)
 {
     if (auto fnsIt = g_deviceFunctions.find(pName); fnsIt != g_deviceFunctions.end())
         return fnsIt->second;
