@@ -298,7 +298,7 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
 
 /**/
 
-static VKAPI_CALL VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkInstance *pInstance)
+static VkResult VKAPI_CALL vkCreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkInstance *pInstance)
 {
     auto layerInstanceCreateInfo = getLayerCreateInfo<VkLayerInstanceCreateInfo>(pCreateInfo->pNext, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO);
     if (!layerInstanceCreateInfo)
@@ -348,7 +348,7 @@ static VKAPI_CALL VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateI
 
     return VK_SUCCESS;
 }
-static VKAPI_CALL void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks *pAllocator)
+static void VKAPI_CALL vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks *pAllocator)
 {
     scoped_lock instancesLock(g_instancesMutex);
 
@@ -364,7 +364,7 @@ static VKAPI_CALL void vkDestroyInstance(VkInstance instance, const VkAllocation
 
 /**/
 
-static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
+static VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
 {
     auto layerDeviceCreateInfo = getLayerCreateInfo<VkLayerDeviceCreateInfo>(pCreateInfo->pNext, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO);
     if (!layerDeviceCreateInfo)
@@ -423,7 +423,7 @@ static VKAPI_CALL VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, const
 
     return VK_SUCCESS;
 }
-static VKAPI_CALL VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSampler *pSampler)
+static VkResult VKAPI_CALL vkCreateSampler(VkDevice device, const VkSamplerCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSampler *pSampler)
 {
     shared_lock devicesLock(g_devicesMutex);
 
@@ -460,7 +460,7 @@ static VKAPI_CALL VkResult vkCreateSampler(VkDevice device, const VkSamplerCreat
 
     return deviceData->createSampler(device, &createInfo, pAllocator, pSampler);
 }
-static VKAPI_CALL VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSwapchainKHR *pSwapchain)
+static VkResult VKAPI_CALL vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSwapchainKHR *pSwapchain)
 {
     shared_lock devicesLock(g_devicesMutex);
 
@@ -518,19 +518,19 @@ static VKAPI_CALL VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
 
     return deviceData->createSwapchainKHR(device, &createInfo, pAllocator, pSwapchain);
 }
-static VKAPI_CALL VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore semaphore, VkFence fence, uint32_t *pImageIndex)
+static VkResult VKAPI_CALL vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore semaphore, VkFence fence, uint32_t *pImageIndex)
 {
     return acquireNextImageCommon(device, [&](DeviceData *deviceData) {
         return deviceData->acquireNextImageKHR(device, swapchain, timeout, semaphore, fence, pImageIndex);
     });
 }
-static VKAPI_CALL VkResult vkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR *pAcquireInfo, uint32_t *pImageIndex)
+static VkResult VKAPI_CALL vkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR *pAcquireInfo, uint32_t *pImageIndex)
 {
     return acquireNextImageCommon(device, [&](DeviceData *deviceData) {
         return deviceData->acquireNextImage2KHR(device, pAcquireInfo, pImageIndex);
     });
 }
-static VKAPI_CALL void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator)
+static void VKAPI_CALL vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator)
 {
     scoped_lock devicesLock(g_devicesMutex);
 
