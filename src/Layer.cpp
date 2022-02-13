@@ -546,12 +546,17 @@ static void VKAPI_CALL vkDestroyDevice(VkDevice device, const VkAllocationCallba
 
 /**/
 
+extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddrFlimes(VkInstance instance, const char *pName);
+extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddrFlimes(VkDevice device, const char *pName);
+
 static const map<string_view, PFN_vkVoidFunction> g_instanceFunctions = {
+    {"vkGetInstanceProcAddr", reinterpret_cast<PFN_vkVoidFunction>(vkGetInstanceProcAddrFlimes)},
     {"vkCreateInstance", reinterpret_cast<PFN_vkVoidFunction>(vkCreateInstance)},
     {"vkCreateDevice", reinterpret_cast<PFN_vkVoidFunction>(vkCreateDevice)},
     {"vkDestroyInstance", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyInstance)},
 };
 static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
+    {"vkGetDeviceProcAddr", reinterpret_cast<PFN_vkVoidFunction>(vkGetDeviceProcAddrFlimes)},
     {"vkCreateSampler", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSampler)},
     {"vkCreateSwapchainKHR", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSwapchainKHR)},
     {"vkAcquireNextImageKHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImageKHR)},
@@ -559,7 +564,7 @@ static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
     {"vkDestroyDevice", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyDevice)},
 };
 
-extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName)
+extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddrFlimes(VkInstance instance, const char *pName)
 {
     if (auto fnsIt = g_instanceFunctions.find(pName); fnsIt != g_instanceFunctions.end())
         return fnsIt->second;
@@ -575,7 +580,7 @@ extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetInstanceProcAddr(V
 
     return instancesIt->second->getProcAddr(instance, pName);
 }
-extern "C" VK_LAYER_EXPORT VKAPI_CALL PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName)
+extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddrFlimes(VkDevice device, const char *pName)
 {
     if (auto fnsIt = g_deviceFunctions.find(pName); fnsIt != g_deviceFunctions.end())
         return fnsIt->second;

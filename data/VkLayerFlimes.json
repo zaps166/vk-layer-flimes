@@ -7,6 +7,10 @@
     "api_version": "1.1.70",
     "library_path": "libvk-layer-flimes.so",
     "implementation_version": "1",
+    "functions": {
+        "vkGetInstanceProcAddr": "vkGetInstanceProcAddrFlimes",
+        "vkGetDeviceProcAddr": "vkGetDeviceProcAddrFlimes"
+    },
     "enable_environment": {
       "ENABLE_VK_LAYER_FLIMES": "1"
     },
