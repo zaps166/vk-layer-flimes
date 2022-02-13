@@ -24,7 +24,7 @@ target_compile_definitions(${PROJECT_NAME}
     PUBLIC
     -DVK_NO_PROTOTYPES
     -DVK_LAYER_FLIMES_NAME="vk-layer-flimes"
-    -DVK_LAYER_FLIMES_VERSION="1.1.3"
+    -DVK_LAYER_FLIMES_VERSION="1.1.4"
 )
 
 option(COMPILE_32_BIT "Compile using -m32 flag")
