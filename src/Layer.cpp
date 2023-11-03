@@ -39,6 +39,10 @@
 #include <map>
 #include <set>
 
+#ifndef VK_LAYER_EXPORT
+#   define VK_LAYER_EXPORT __attribute__((visibility("default")))
+#endif
+
 using namespace std;
 
 constexpr auto g_enableExternalControlKey = "VK_LAYER_FLIMES_ENABLE_EXTERNAL_CONTROL";
