@@ -38,6 +38,12 @@ if(COMPILE_32_BIT)
         -m32
     )
 endif()
+if(SW)
+    target_compile_definitions(${PROJECT_NAME}
+        PUBLIC
+        -DSW
+    )
+endif()
 
 target_link_libraries(${PROJECT_NAME}
     ${CMAKE_THREAD_LIBS_INIT}

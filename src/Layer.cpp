@@ -39,6 +39,11 @@
 #include <map>
 #include <set>
 
+#ifdef SW
+#   include <unordered_map>
+#   include <cstring>
+#endif
+
 #ifndef VK_LAYER_EXPORT
 #   define VK_LAYER_EXPORT __attribute__((visibility("default")))
 #endif
@@ -58,6 +63,11 @@ constexpr auto g_preferMailboxPresentModeEnvKey = "VK_LAYER_FLIMES_PREFER_MAILBO
 
 static unique_ptr<ExternalControl> g_externalControl;
 static bool g_externalControlVerbose = false;
+
+#ifdef SW
+    static unordered_map<thread::id, pair<uintptr_t, uintptr_t>> g_drawInfo; // [draw count per image acquire, draw vertices per image acquire]
+    static shared_mutex g_drawInfoMutex;
+#endif
 
 struct InstanceData
 {
@@ -80,6 +90,9 @@ struct DeviceData
 
     PFN_vkCreateSampler createSampler = nullptr;
     PFN_vkCreateSwapchainKHR createSwapchainKHR = nullptr;
+#ifdef SW
+    PFN_vkCmdDraw cmdDraw = nullptr;
+#endif
     PFN_vkAcquireNextImageKHR acquireNextImageKHR = nullptr;
     PFN_vkAcquireNextImage2KHR acquireNextImage2KHR = nullptr;
     PFN_vkDestroyDevice destroyDevice = nullptr;
@@ -114,6 +127,10 @@ struct Config
         Trilinear,
     };
 
+#ifdef SW
+    bool isSw = false;
+#endif
+
     double framerate = 0.0;
 
     optional<Filter> filter;
@@ -128,6 +145,10 @@ static Config g_config = [] {
     Config config;
 
     cerr << boolalpha << VK_LAYER_FLIMES_NAME << " v" << VK_LAYER_FLIMES_VERSION << " active" << "\n";
+
+#ifdef SW
+    config.isSw = (strcasestr(program_invocation_name, "SoulWorker") != nullptr) && (strcasestr(program_invocation_name, ".exe") != nullptr);
+#endif
 
     if (auto env = getenv(g_framerateEnvKey); env && *env)
     {
@@ -290,12 +311,42 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
 
     auto deviceData = devicesIt->second.get();
 
+#ifdef SW
+    bool isSwLoading = false;
+
+    if (g_config.isSw)
+    {
+        scoped_lock locker(g_drawInfoMutex);
+        for (auto &&[a, b] : g_drawInfo)
+        {
+            if (b.first == 1 && b.second == 6)
+            {
+                isSwLoading = true;
+            }
+            b.first = 0;
+            b.second = 0;
+        }
+    }
+#endif
+
     if (deviceData->presentModeChanged)
         return VK_ERROR_OUT_OF_DATE_KHR;
 
     auto ret = fn(deviceData);
     if (ret == VK_SUCCESS || ret == VK_SUBOPTIMAL_KHR)
-        limitFramerate(deviceData);
+    {
+#ifdef SW
+        if (isSwLoading)
+        {
+            for (auto &&[device, deviceData] : g_devices)
+                deviceData->frameLimiter.reset();
+        }
+        else
+#endif
+        {
+            limitFramerate(deviceData);
+        }
+    }
 
     return ret;
 }
@@ -409,6 +460,10 @@ static VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const
 
     deviceData->createSampler = reinterpret_cast<PFN_vkCreateSampler>(getDeviceProcAddr(*pDevice, "vkCreateSampler"));
     deviceData->createSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(getDeviceProcAddr(*pDevice, "vkCreateSwapchainKHR"));
+#ifdef SW
+    if (g_config.isSw)
+        deviceData->cmdDraw = reinterpret_cast<PFN_vkCmdDraw>(getDeviceProcAddr(*pDevice, "vkCmdDraw"));
+#endif
     deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImageKHR"));
     deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
     deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(getDeviceProcAddr(*pDevice, "vkDestroyDevice"));
@@ -522,6 +577,26 @@ static VkResult VKAPI_CALL vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
 
     return deviceData->createSwapchainKHR(device, &createInfo, pAllocator, pSwapchain);
 }
+#ifdef SW
+static void vkCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+{
+    // This function must never be called if "g_config.isSw" is "false"
+
+    {
+        scoped_lock locker(g_drawInfoMutex);
+        auto &drawInfo = g_drawInfo[this_thread::get_id()];
+        drawInfo.first += 1;
+        drawInfo.second += vertexCount;
+    }
+
+    shared_lock devicesLock(g_devicesMutex);
+
+    if (g_devices.size() != 1)
+        return;
+
+    g_devices.begin()->second->cmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+#endif
 static VkResult VKAPI_CALL vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore semaphore, VkFence fence, uint32_t *pImageIndex)
 {
     return acquireNextImageCommon(device, [&](DeviceData *deviceData) {
@@ -562,6 +637,9 @@ static const map<string_view, PFN_vkVoidFunction> g_instanceFunctions = {
 static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
     {"vkGetDeviceProcAddr", reinterpret_cast<PFN_vkVoidFunction>(vkGetDeviceProcAddrFlimes)},
     {"vkCreateSampler", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSampler)},
+#ifdef SW
+    {"vkCmdDraw", reinterpret_cast<PFN_vkVoidFunction>(vkCmdDraw)},
+#endif
     {"vkCreateSwapchainKHR", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSwapchainKHR)},
     {"vkAcquireNextImageKHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImageKHR)},
     {"vkAcquireNextImage2KHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImage2KHR)},
@@ -587,7 +665,12 @@ extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddrFl
 extern "C" VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddrFlimes(VkDevice device, const char *pName)
 {
     if (auto fnsIt = g_deviceFunctions.find(pName); fnsIt != g_deviceFunctions.end())
-        return fnsIt->second;
+    {
+#ifdef SW
+        if (fnsIt->second != reinterpret_cast<PFN_vkVoidFunction>(vkCmdDraw) || g_config.isSw)
+#endif
+            return fnsIt->second;
+    }
 
     shared_lock devicesLock(g_devicesMutex);
 
