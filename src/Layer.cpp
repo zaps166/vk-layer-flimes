@@ -110,6 +110,15 @@ struct DeviceData
 
     optional<VkPresentModeKHR> currentPresentMode;
     bool presentModeChanged = false;
+
+#ifdef SW
+    struct
+    {
+        bool wasLoading = false;
+        optional<chrono::time_point<FrameLimiter::frame_clock>> loadedTimePoint;
+        bool configPresentModeChanged = false;
+    } sw;
+#endif
 };
 static map<VkDevice, unique_ptr<DeviceData>> g_devices;
 static shared_mutex g_devicesMutex;
@@ -302,6 +311,86 @@ static T *getLayerCreateInfo(const void *pNext, VkStructureType type)
     return const_cast<T *>(layerCreateInfo);
 }
 
+#ifdef SW
+static bool isGameLoading(DeviceData *deviceData)
+{
+    if (!g_config.isSw)
+        return false;
+
+    bool isSwLoading = false;
+    {
+        scoped_lock locker(g_drawInfoMutex);
+        for (auto &&[tid, d] : g_drawInfo)
+        {
+            auto &&[cnt, vert] = d;
+            if (cnt == 1 && vert == 6)
+            {
+                isSwLoading = true;
+                deviceData->sw.wasLoading = true;
+            }
+            cnt = 0;
+            vert = 0;
+        }
+    }
+    if (!isSwLoading && deviceData->sw.wasLoading)
+    {
+        deviceData->sw.wasLoading = false;
+        deviceData->sw.loadedTimePoint = FrameLimiter::frame_clock::now();
+    }
+    if (!isSwLoading && deviceData->sw.loadedTimePoint.has_value())
+    {
+        const auto msAfterLoading = chrono::duration_cast<chrono::milliseconds>(FrameLimiter::frame_clock::now() - deviceData->sw.loadedTimePoint.value()).count();
+        if (msAfterLoading <= 1500)
+        {
+            // Keep unlocked framerate for a while
+            isSwLoading = true;
+        }
+        else
+        {
+            deviceData->sw.loadedTimePoint.reset();
+        }
+    }
+    if (isSwLoading
+            && deviceData->currentPresentMode.has_value()
+            && deviceData->currentPresentMode.value() != VK_PRESENT_MODE_IMMEDIATE_KHR
+            && deviceData->currentPresentMode.value() != VK_PRESENT_MODE_MAILBOX_KHR)
+    {
+        // Disable blocking V-Sync (if enabled)
+        bool hasImmediate = false;
+        bool hasMailbox = false;
+        for (auto &&presentMode : deviceData->presentModes)
+        {
+            if (presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+                hasImmediate = true;
+            else if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+                hasMailbox = true;
+        }
+        if (hasImmediate || hasMailbox)
+        {
+            g_config.presentMode = hasImmediate
+                ? VK_PRESENT_MODE_IMMEDIATE_KHR
+                : VK_PRESENT_MODE_MAILBOX_KHR
+            ;
+            deviceData->presentModeChanged = true;
+            deviceData->sw.configPresentModeChanged = true;
+        }
+    }
+    else if (!isSwLoading && deviceData->sw.configPresentModeChanged)
+    {
+        g_config.presentMode.reset();
+        deviceData->presentModeChanged = true;
+        deviceData->sw.configPresentModeChanged = false;
+    }
+    if (isSwLoading)
+    {
+        for (auto &&[device, deviceData] : g_devices)
+            deviceData->frameLimiter.reset();
+    }
+
+    return isSwLoading;
+}
+#endif
+
 template<typename Fn>
 static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
 {
@@ -314,21 +403,7 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
     auto deviceData = devicesIt->second.get();
 
 #ifdef SW
-    bool isSwLoading = false;
-
-    if (g_config.isSw)
-    {
-        scoped_lock locker(g_drawInfoMutex);
-        for (auto &&[a, b] : g_drawInfo)
-        {
-            if (b.first == 1 && b.second == 6)
-            {
-                isSwLoading = true;
-            }
-            b.first = 0;
-            b.second = 0;
-        }
-    }
+    const bool gameLoading = isGameLoading(deviceData);
 #endif
 
     if (deviceData->presentModeChanged)
@@ -338,12 +413,7 @@ static VkResult acquireNextImageCommon(VkDevice device, Fn &&fn)
     if (ret == VK_SUCCESS || ret == VK_SUBOPTIMAL_KHR)
     {
 #ifdef SW
-        if (isSwLoading)
-        {
-            for (auto &&[device, deviceData] : g_devices)
-                deviceData->frameLimiter.reset();
-        }
-        else
+        if (!gameLoading)
 #endif
         {
             limitFramerate(deviceData);

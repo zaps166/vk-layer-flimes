@@ -38,6 +38,8 @@ if(COMPILE_32_BIT)
         -m32
     )
 endif()
+
+option(SW "Unlock FPS when SW is loading")
 if(SW)
     target_compile_definitions(${PROJECT_NAME}
         PUBLIC
