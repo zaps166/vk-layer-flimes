@@ -28,6 +28,7 @@
 
 class FrameLimiter
 {
+public:
     using frame_clock = std::chrono::steady_clock;
     using duration = frame_clock::duration;
 
