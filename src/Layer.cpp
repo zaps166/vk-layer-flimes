@@ -106,6 +106,8 @@ struct DeviceData
 
     optional<FrameLimiter> frameLimiter;
 
+    vector<VkPresentModeKHR> presentModes;
+
     optional<VkPresentModeKHR> currentPresentMode;
     bool presentModeChanged = false;
 };
@@ -535,15 +537,19 @@ static VkResult VKAPI_CALL vkCreateSwapchainKHR(VkDevice device, const VkSwapcha
 
     auto createInfo = *pCreateInfo;
 
-    if ((g_config.presentMode || g_config.preferMailboxPresentMode) && instanceData->getPhysicalDeviceSurfacePresentModesKHR)
+    if (instanceData->getPhysicalDeviceSurfacePresentModesKHR)
     {
         uint32_t nPresentModes = 0;
         instanceData->getPhysicalDeviceSurfacePresentModesKHR(deviceData->physicalDevice, createInfo.surface, &nPresentModes, nullptr);
 
-        vector<VkPresentModeKHR> presentModes(nPresentModes);
-        instanceData->getPhysicalDeviceSurfacePresentModesKHR(deviceData->physicalDevice, createInfo.surface, &nPresentModes, presentModes.data());
+        deviceData->presentModes.clear();
+        deviceData->presentModes.resize(nPresentModes);
+        instanceData->getPhysicalDeviceSurfacePresentModesKHR(deviceData->physicalDevice, createInfo.surface, &nPresentModes, deviceData->presentModes.data());
+    }
 
-        for (auto &&supportedPresentMode : presentModes)
+    if (g_config.presentMode || g_config.preferMailboxPresentMode)
+    {
+        for (auto &&supportedPresentMode : deviceData->presentModes)
         {
             if (g_config.presentMode && supportedPresentMode == *g_config.presentMode)
             {
