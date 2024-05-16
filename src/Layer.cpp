@@ -95,6 +95,7 @@ struct DeviceData
 #endif
     PFN_vkAcquireNextImageKHR acquireNextImageKHR = nullptr;
     PFN_vkAcquireNextImage2KHR acquireNextImage2KHR = nullptr;
+    PFN_vkQueuePresentKHR queuePresentKHR = nullptr;
     PFN_vkDestroyDevice destroyDevice = nullptr;
 
     weak_ptr<InstanceData> instanceData;
@@ -120,7 +121,8 @@ struct DeviceData
     } sw;
 #endif
 };
-static map<VkDevice, unique_ptr<DeviceData>> g_devices;
+static map<VkDevice, shared_ptr<DeviceData>> g_devices;
+static map<VkQueue, shared_ptr<DeviceData>> g_queues;
 static shared_mutex g_devicesMutex;
 
 static const map<string_view, VkPresentModeKHR> g_presentModes {
@@ -526,7 +528,7 @@ static VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const
     scoped_lock devicesLock(g_devicesMutex);
 
     auto &deviceData = g_devices[*pDevice];
-    deviceData = make_unique<DeviceData>();
+    deviceData = make_shared<DeviceData>();
 
     deviceData->getProcAddr = getDeviceProcAddr;
 
@@ -538,7 +540,20 @@ static VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const
 #endif
     deviceData->acquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImageKHR"));
     deviceData->acquireNextImage2KHR = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(getDeviceProcAddr(*pDevice, "vkAcquireNextImage2KHR"));
+    deviceData->queuePresentKHR = reinterpret_cast<PFN_vkQueuePresentKHR>(getDeviceProcAddr(*pDevice, "vkQueuePresentKHR"));
     deviceData->destroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(getDeviceProcAddr(*pDevice, "vkDestroyDevice"));
+
+    auto vkGetDeviceQueue = reinterpret_cast<PFN_vkGetDeviceQueue>(getDeviceProcAddr(*pDevice, "vkGetDeviceQueue"));
+    for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; ++i)
+    {
+        const auto &queueCreateInfo = pCreateInfo->pQueueCreateInfos[i];
+        for (uint32_t j = 0; j < queueCreateInfo.queueCount; ++j)
+        {
+            VkQueue queue = VK_NULL_HANDLE;
+            vkGetDeviceQueue(*pDevice, queueCreateInfo.queueFamilyIndex, j, &queue);
+            g_queues[queue] = deviceData;
+        }
+    }
 
     deviceData->instanceData = instanceData;
 
@@ -685,6 +700,45 @@ static VkResult VKAPI_CALL vkAcquireNextImage2KHR(VkDevice device, const VkAcqui
         return deviceData->acquireNextImage2KHR(device, pAcquireInfo, pImageIndex);
     });
 }
+static VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
+{
+    shared_lock devicesLock(g_devicesMutex);
+
+    auto queuesIt = g_queues.find(queue);
+    if (queuesIt == g_queues.end())
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    auto deviceData = queuesIt->second.get();
+
+    VkBaseOutStructure *backupNextPtr = nullptr;
+    VkBaseOutStructure *backupStructPtr = nullptr;
+
+    if (g_config.presentMode || g_config.preferMailboxPresentMode)
+    {
+        // Prevent setting present mode here when we have forced present mode.
+        auto next = reinterpret_cast<VkBaseOutStructure *>(const_cast<void *>(pPresentInfo->pNext));
+        auto prev = reinterpret_cast<VkBaseOutStructure *>(const_cast<VkPresentInfoKHR *>(pPresentInfo));
+        while (next)
+        {
+            if (next->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT)
+            {
+                backupStructPtr = prev;
+                backupNextPtr = prev->pNext;
+                prev->pNext = next->pNext;
+                break;
+            }
+            prev = next;
+            next = next->pNext;
+        }
+    }
+
+    auto ret = deviceData->queuePresentKHR(queue, pPresentInfo);
+
+    if (backupStructPtr)
+        backupStructPtr->pNext = backupNextPtr;
+
+    return ret;
+}
 static void VKAPI_CALL vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator)
 {
     scoped_lock devicesLock(g_devicesMutex);
@@ -693,8 +747,17 @@ static void VKAPI_CALL vkDestroyDevice(VkDevice device, const VkAllocationCallba
     if (devicesIt == g_devices.end())
         return;
 
-    if (auto destroyDevice = devicesIt->second->destroyDevice)
-        destroyDevice(device, pAllocator);
+    auto deviceData = devicesIt->second.get();
+
+    deviceData->destroyDevice(device, pAllocator);
+
+    for (auto it = g_queues.begin(); it != g_queues.end();)
+    {
+        if (it->second.get() == deviceData)
+            it = g_queues.erase(it);
+        else
+            ++it;
+    }
 
     g_devices.erase(devicesIt);
 }
@@ -719,6 +782,7 @@ static const map<string_view, PFN_vkVoidFunction> g_deviceFunctions = {
     {"vkCreateSwapchainKHR", reinterpret_cast<PFN_vkVoidFunction>(vkCreateSwapchainKHR)},
     {"vkAcquireNextImageKHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImageKHR)},
     {"vkAcquireNextImage2KHR", reinterpret_cast<PFN_vkVoidFunction>(vkAcquireNextImage2KHR)},
+    {"vkQueuePresentKHR", reinterpret_cast<PFN_vkVoidFunction>(vkQueuePresentKHR)},
     {"vkDestroyDevice", reinterpret_cast<PFN_vkVoidFunction>(vkDestroyDevice)},
 };
 
