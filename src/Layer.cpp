@@ -34,12 +34,12 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <thread>
 #include <mutex>
 #include <map>
 #include <set>
 
 #ifdef SW
+#   include <pthread.h>
 #   include <unordered_map>
 #   include <cstring>
 #endif
@@ -65,7 +65,8 @@ static unique_ptr<ExternalControl> g_externalControl;
 static bool g_externalControlVerbose = false;
 
 #ifdef SW
-    static unordered_map<thread::id, pair<uintptr_t, uintptr_t>> g_drawInfo; // [draw count per image acquire, draw vertices per image acquire]
+    static pthread_t g_drawThr = 0;
+    static pair<uintptr_t, uintptr_t> g_drawInfo; // [draw count per image acquire, draw vertices per image acquire]
     static shared_mutex g_drawInfoMutex;
 #endif
 
@@ -322,10 +323,10 @@ static bool isGameLoading(DeviceData *deviceData)
     bool isSwLoading = false;
     {
         scoped_lock locker(g_drawInfoMutex);
-        for (auto &&[tid, d] : g_drawInfo)
+        if (g_drawThr != 0)
         {
-            auto &&[cnt, vert] = d;
-            if (cnt == 1 && vert == 6)
+            auto &&[cnt, vert] = g_drawInfo;
+            if ((cnt == 1 && vert == 6) || (cnt == 2 && vert == 12) || (cnt == 3 && vert == 15))
             {
                 isSwLoading = true;
                 deviceData->sw.wasLoading = true;
@@ -342,7 +343,7 @@ static bool isGameLoading(DeviceData *deviceData)
     if (!isSwLoading && deviceData->sw.loadedTimePoint.has_value())
     {
         const auto msAfterLoading = chrono::duration_cast<chrono::milliseconds>(FrameLimiter::frame_clock::now() - deviceData->sw.loadedTimePoint.value()).count();
-        if (msAfterLoading <= 1500)
+        if (msAfterLoading <= 2000)
         {
             // Keep unlocked framerate for a while
             isSwLoading = true;
@@ -674,10 +675,19 @@ static void vkCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount, uint3
     // This function must never be called if "g_config.isSw" is "false"
 
     {
+        const pthread_t currThr = pthread_self();
         scoped_lock locker(g_drawInfoMutex);
-        auto &drawInfo = g_drawInfo[this_thread::get_id()];
-        drawInfo.first += 1;
-        drawInfo.second += vertexCount;
+        if (g_drawThr == 0)
+        {
+            char name[16];
+            if (pthread_getname_np(pthread_self(), name, sizeof(name)) == 0 && strcmp(name, "dxvk-cs") == 0)
+                g_drawThr = currThr;
+        }
+        if (g_drawThr == currThr)
+        {
+            g_drawInfo.first += 1;
+            g_drawInfo.second += vertexCount;
+        }
     }
 
     shared_lock devicesLock(g_devicesMutex);
